@@ -481,17 +481,10 @@ static ssize_t fan_mode_store(struct device *dev, struct device_attribute *attr,
 	gigabyte = dev_get_drvdata(dev);
 	mutex_lock(&gigabyte->lock);
 
-	if (gigabyte->fan_mode == fan_mode) {
-		pr_warn("Already set to that fan mode\n");
-		goto out;
-	}
-
 	ret = set_fan_mode(gigabyte, fan_modes[fan_mode]);
-	if (ret)
-		goto out;
+	if (!ret)
+		gigabyte->fan_mode = fan_mode;
 
-	gigabyte->fan_mode = fan_mode;
-out:
 	mutex_unlock(&gigabyte->lock);
 	return ret ? ret : count;
 }
