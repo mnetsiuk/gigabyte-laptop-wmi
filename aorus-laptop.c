@@ -1121,8 +1121,15 @@ static void __exit gigabyte_laptop_exit(void)
 
 	pr_info("Stopping AORUS WMI kernel driver\n");
 	gigabyte = platform_get_drvdata(platform_device);
+
 	hwmon_device_unregister(gigabyte->hwmon_dev);
 	sysfs_remove_group(&gigabyte->pdev->dev.kobj, &gigabyte_laptop_attr_group);
+
+	// Nothing controls the fans after unload, so leave fixed and auto-maximum mode.
+	// The attributes are gone, so no writer can switch them back on.
+	if (gigabyte->fan_mode > 3 && set_fan_mode(gigabyte, fan_modes[0]))
+		pr_warn("Unable to return the fans to normal mode\n");
+
 	platform_driver_unregister(&platform_driver);
 	platform_device_unregister(gigabyte->pdev);
 	kfree(gigabyte);
