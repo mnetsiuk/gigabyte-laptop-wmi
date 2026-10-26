@@ -997,11 +997,12 @@ obtain_fan_mode:
 	if (ret)
 		return ret;
 	else if (output) {
-		// Auto-maximum mode can't be read through WMI, so read EC register containing it
+		// Auto-maximum mode can't be read through WMI, so read EC register containing it.
+		// It is GFAN, bit 0. Bit 7 is TENF, the custom mode flag WMBC 0x67 just returned.
 		ret = ec_read(0xD, &result);
 		if (ret)
 			return ret;
-		output = (result >> 7) & 0x1;
+		output = result & 0x1;
 		if (output) {
 			gigabyte->fan_mode = 4;
 			goto obtain_custom_fan_speed;
