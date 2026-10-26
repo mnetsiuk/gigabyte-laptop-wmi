@@ -823,7 +823,7 @@ static ssize_t _device##_toggle_show(struct device *dev, struct device_attribute
 		return ret; \
 	return sysfs_emit(buf, "%d\n", output); \
 } \
-static DEVICE_ATTR_RO(_device##_toggle);
+static DEVICE_ATTR_RO(_device##_toggle)
 TOGGLE_DEVICE(usb_charge_s3, USB_SLEEP);
 TOGGLE_DEVICE(usb_charge_s4, USB_HIBERNATE);
 
@@ -951,6 +951,7 @@ static int gigabyte_laptop_probe(struct device *dev)
 {
 	int ret, output;
 	u8 result;
+	u8 light_sensor_result[4];
 	struct gigabyte_laptop_wmi *gigabyte = dev_get_drvdata(dev);
 
 	// Older devices are using a different method ID for silent fan mode.
@@ -1066,7 +1067,6 @@ obtain_custom_fan_speed:
 	}
 
 	// Test for new light sensor method. Older models don't support it.
-	u8 light_sensor_result[4];
 	ret = gigabyte_laptop_get_devstate(LIGHT_SENSOR_NEW, &light_sensor_result);
 	if (ret)
 		return ret;
@@ -1122,7 +1122,6 @@ obtain_custom_fan_speed:
 static struct platform_driver platform_driver = {
 	.driver = {
 		.name = GIGABYTE_LAPTOP_FILE,
-		.owner = THIS_MODULE,
 		.suppress_bind_attrs = true,
 	},
 };
