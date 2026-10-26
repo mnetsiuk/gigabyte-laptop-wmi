@@ -1112,6 +1112,7 @@ static struct platform_driver platform_driver = {
 	.driver = {
 		.name = GIGABYTE_LAPTOP_FILE,
 		.owner = THIS_MODULE,
+		.suppress_bind_attrs = true,
 	},
 };
 
