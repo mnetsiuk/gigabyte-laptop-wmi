@@ -125,7 +125,7 @@ static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result, 
 	memset(result, 0, size);
 	status = wmi_evaluate_method(WMI_METHOD_WMBC, 0, method_id, &input, &buffer);
 	if (ACPI_FAILURE(status))
-		return -1;
+		return -EIO;
 
 	obj = buffer.pointer;
 	if (obj && obj->type == ACPI_TYPE_INTEGER)
@@ -167,7 +167,7 @@ static int gigabyte_laptop_set_devstate(u32 method_id, u32 arg2, int *result)
 
 	status = wmi_evaluate_method(WMI_METHOD_WMBD, 0, method_id, &input, &buffer);
 	if (ACPI_FAILURE(status))
-		return -1;
+		return -EIO;
 
 	obj = buffer.pointer;
 	if (obj && obj->type == ACPI_TYPE_INTEGER)
@@ -245,13 +245,14 @@ static umode_t gigabyte_laptop_hwmon_is_visible(const void *data, enum hwmon_sen
 static int gigabyte_laptop_hwmon_read(struct device *dev, enum hwmon_sensor_types type,
 					u32 attr, int channel, long *val)
 {
-	int ret, output;
+	int ret = 0, output;
 	u8 result;
 	u8 fan_channels[] = { FAN_CPU_RPM, FAN_GPU_RPM, FAN_THREE_RPM, FAN_FOUR_RPM };
 	u8 fan_pwm_channels[] = { FAN_PWM, GPU_FAN_DUTY };
 
 	struct gigabyte_laptop_wmi *gigabyte = dev_get_drvdata(dev);
 
+	*val = 0;
 	switch (type) {
 		case hwmon_temp:
 			switch (channel) {
@@ -312,7 +313,7 @@ static int gigabyte_laptop_hwmon_read(struct device *dev, enum hwmon_sensor_type
 		default:
 			break;
 	}
-	return 0;
+	return ret;
 }
 
 static const struct hwmon_channel_info *gigabyte_laptop_hwmon_info[] = {
@@ -462,7 +463,7 @@ static ssize_t fan_mode_store(struct device *dev, struct device_attribute *attr,
 	ret = kstrtouint(buf, 0, &fan_mode);
 	if (ret) {
 		pr_err("kstrtouint failed\n");
-		return count;
+		return ret;
 	}
 
 	gigabyte = dev_get_drvdata(dev);
@@ -919,7 +920,7 @@ static int gigabyte_laptop_probe(struct device *dev)
 	}
 
 	ret = gigabyte_laptop_get_devstate(FAN_SILENT_OLD, &output);
-	if (output < 0) { // -1 on newer devices
+	if (ret || output < 0) { // -1 or no result on newer devices
 		pr_info("Newer model detected, using new silent fan mode ID\n");
 		gigabyte->fan_silent_method = FAN_SILENT_MODE;
 	}
@@ -954,7 +955,7 @@ obtain_fan_mode:
 		// Auto-maximum mode can't be read through WMI, so read EC register containing it
 		ret = ec_read(0xD, &result);
 		if (ret)
-			return AE_ERROR;
+			return ret;
 		output = (result >> 7) & 0x1;
 		if (output) {
 			gigabyte->fan_mode = 4;
