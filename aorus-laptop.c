@@ -115,13 +115,14 @@ static u8 fan_modes[] = {
 /* WMI methods ********************************************/
 
 /* WMBC method (checks value in EC) */
-static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result)
+static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result, size_t size)
 {
 	union acpi_object *obj;
 	acpi_status status;
 	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
 	struct acpi_buffer input = { sizeof(arg2), &arg2 };
 
+	memset(result, 0, size);
 	status = wmi_evaluate_method(WMI_METHOD_WMBC, 0, method_id, &input, &buffer);
 	if (ACPI_FAILURE(status))
 		return -1;
@@ -142,7 +143,7 @@ static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result)
 		for (int i = 0; i < obj->buffer.length; i++) {
 			pr_info("%02x \n", obj->buffer.pointer[i]);
 		}*/
-		memcpy(result, obj->buffer.pointer, obj->buffer.length);
+		memcpy(result, obj->buffer.pointer, min_t(size_t, obj->buffer.length, size));
 	}
 	else {
 		kfree(obj);
@@ -152,9 +153,9 @@ static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result)
 	return 0;
 }
 
-static int gigabyte_laptop_get_devstate(u32 method_id, void *result) {
-	return gigabyte_laptop_get_devstate2(method_id, 0, result);
-}
+// The destination size comes from the type of result, so always pass &variable.
+#define gigabyte_laptop_get_devstate(method_id, result) \
+	gigabyte_laptop_get_devstate2(method_id, 0, result, sizeof(*(result)))
 
 /* WMBD method (sets value in EC) */
 static int gigabyte_laptop_set_devstate(u32 method_id, u32 arg2, int *result)
@@ -1010,7 +1011,7 @@ obtain_custom_fan_speed:
 
 	// Get the fan curve. Used by custom mode.
 	for (u8 i = 0; i < FAN_CURVE_POINTS; i++) {
-		ret = gigabyte_laptop_get_devstate2(FAN_INDEX_VALUE, i, &output);
+		ret = gigabyte_laptop_get_devstate2(FAN_INDEX_VALUE, i, &output, sizeof(output));
 		if (ret)
 			return ret;
 		else if (output) {
