@@ -133,8 +133,11 @@ static int gigabyte_laptop_get_devstate2(u32 method_id, u32 arg2, void *result, 
 		return -EIO;
 
 	obj = buffer.pointer;
-	if (obj && obj->type == ACPI_TYPE_INTEGER)
-		*(int *)result = obj->integer.value;
+	if (obj && obj->type == ACPI_TYPE_INTEGER) {
+		int value = obj->integer.value;
+
+		memcpy(result, &value, min(size, sizeof(value)));
+	}
 	// TODO: Fix copying data to pointer
 	else if (obj && obj->type == ACPI_TYPE_BUFFER) {
 		if (obj->buffer.length == 0) {
