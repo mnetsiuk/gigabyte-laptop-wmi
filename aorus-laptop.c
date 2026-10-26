@@ -1182,9 +1182,8 @@ static int __init gigabyte_laptop_init(void)
 	platform_device = platform_device_alloc(GIGABYTE_LAPTOP_FILE, -1);
 	if (!platform_device) {
 		pr_warn("Unable to allocate platform device\n");
-		kfree(gigabyte);
 		result = -ENOMEM;
-		goto fail_platform_driver;
+		goto fail_free;
 	}
 
 	gigabyte->pdev = platform_device;
@@ -1224,6 +1223,8 @@ fail_sysfs:
 	platform_device_del(gigabyte->pdev);
 fail_platform_device:
 	platform_device_put(gigabyte->pdev);
+fail_free:
+	kfree(gigabyte);
 fail_platform_driver:
 	platform_driver_unregister(&platform_driver);
 	return result;
