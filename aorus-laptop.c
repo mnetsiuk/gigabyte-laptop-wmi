@@ -868,6 +868,7 @@ static const struct attribute_group gigabyte_laptop_attr_group = {
 	//.is_visible = gigabyte_laptop_sysfs_is_visible,
 	.attrs = gigabyte_laptop_attributes,
 };
+__ATTRIBUTE_GROUPS(gigabyte_laptop_attr);
 
 #define DMI_EXACT_MATCH_GIGABYTE_LAPTOP_FAMILY(name) \
 	{ .matches = { \
@@ -1138,7 +1139,8 @@ static void __exit gigabyte_laptop_exit(void)
 	gigabyte = platform_get_drvdata(platform_device);
 
 	hwmon_device_unregister(gigabyte->hwmon_dev);
-	sysfs_remove_group(&gigabyte->pdev->dev.kobj, &gigabyte_laptop_attr_group);
+	// Removes the attributes before unbinding clears the driver data
+	platform_device_unregister(gigabyte->pdev);
 
 	// Nothing controls the fans after unload, so leave fixed and auto-maximum mode.
 	// The attributes are gone, so no writer can switch them back on.
@@ -1146,7 +1148,6 @@ static void __exit gigabyte_laptop_exit(void)
 		pr_warn("Unable to return the fans to normal mode\n");
 
 	platform_driver_unregister(&platform_driver);
-	platform_device_unregister(gigabyte->pdev);
 	kfree(gigabyte);
 }
 
@@ -1196,16 +1197,13 @@ static int __init gigabyte_laptop_init(void)
 		goto fail_platform_device;
 	}
 
+	// Let the device core create the attributes, before the uevents that can start userspace.
+	gigabyte->pdev->dev.groups = gigabyte_laptop_attr_groups;
 	result = platform_device_add(gigabyte->pdev);
 	if (result) {
 		pr_warn("Unable to add platform device\n");
 		goto fail_platform_device;
 	}
-
-	result = sysfs_create_group(&gigabyte->pdev->dev.kobj,
-					&gigabyte_laptop_attr_group);
-	if (result)
-		goto fail_sysfs;
 
 	gigabyte->hwmon_dev = hwmon_device_register_with_info(&gigabyte->pdev->dev,
 			GIGABYTE_LAPTOP_FILE, gigabyte, &gigabyte_laptop_chip_info, NULL);
@@ -1218,8 +1216,6 @@ static int __init gigabyte_laptop_init(void)
 	return 0;
 
 fail_hwmon:
-	sysfs_remove_group(&gigabyte->pdev->dev.kobj, &gigabyte_laptop_attr_group);
-fail_sysfs:
 	platform_device_del(gigabyte->pdev);
 fail_platform_device:
 	platform_device_put(gigabyte->pdev);
