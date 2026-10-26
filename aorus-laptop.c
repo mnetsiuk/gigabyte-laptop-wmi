@@ -434,6 +434,11 @@ static int set_fan_mode(struct gigabyte_laptop_wmi *gigabyte, u32 fan_mode)
 				return ret;
 		}
 
+		// A fixed mode flag left set outside fixed mode would hold the fans at the fixed duty
+		ret = gigabyte_laptop_set_devstate(FAN_FIXED_MODE, 0, &result);
+		if (ret)
+			return ret;
+
 		ret = gigabyte_laptop_set_devstate(FAN_CUSTOM_MODE, 1, &result);
 		if (ret)
 			return ret;
