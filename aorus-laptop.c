@@ -829,7 +829,7 @@ static DEVICE_ATTR_RO(battery_cycle);
 static DEVICE_ATTR_RO(light_sensor);
 static DEVICE_ATTR_RO(power_on_time);
 static DEVICE_ATTR_RO(has_dgpu_ejector);
-static DEVICE_ATTR_RW(debug_method);
+static DEVICE_ATTR_ADMIN_RW(debug_method);
 
 static struct attribute *gigabyte_laptop_attributes[] = {
 	&dev_attr_fan_mode.attr,
