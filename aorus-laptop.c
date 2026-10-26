@@ -1160,6 +1160,13 @@ static int __init gigabyte_laptop_init(void)
 	gigabyte->pdev = platform_device;
 	platform_set_drvdata(gigabyte->pdev, gigabyte);
 
+	// Read the EC state before userspace can see the device and its attributes.
+	result = gigabyte_laptop_probe(&gigabyte->pdev->dev);
+	if (result) {
+		pr_err("Probe failed\n");
+		goto fail_platform_device;
+	}
+
 	result = platform_device_add(gigabyte->pdev);
 	if (result) {
 		pr_warn("Unable to add platform device\n");
@@ -1176,19 +1183,12 @@ static int __init gigabyte_laptop_init(void)
 	if (IS_ERR(gigabyte->hwmon_dev)) {
 		result = PTR_ERR(gigabyte->hwmon_dev);
 		pr_err("hwmon registration failed with %d\n", result);
-		goto fail_sysfs;
-	}
-
-	result = gigabyte_laptop_probe(&gigabyte->pdev->dev);
-	if (result) {
-		pr_err("Probe failed\n");
-		goto fail_probe;
+		goto fail_hwmon;
 	}
 	pr_info("AORUS WMI kernel driver started\n");
 	return 0;
 
-fail_probe:
-	hwmon_device_unregister(gigabyte->hwmon_dev);
+fail_hwmon:
 	sysfs_remove_group(&gigabyte->pdev->dev.kobj, &gigabyte_laptop_attr_group);
 fail_sysfs:
 	platform_device_del(gigabyte->pdev);
