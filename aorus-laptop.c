@@ -287,8 +287,8 @@ static int gigabyte_laptop_hwmon_read(struct device *dev, enum hwmon_sensor_type
 			if (ret)
 				break;
 			// Gigabyte Gaming laptops store fan RPM in little-endian
-			if (!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY),"GIGABYTE GAMING") ||
-				!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY),"GIGABYTE AERO"))
+			if (dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE GAMING") ||
+				dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE AERO"))
 				*val = output;
 			else
 				*val = convert_fan_rpm(output);
@@ -907,7 +907,11 @@ static const struct dmi_system_id gigabyte_laptop_dgpu_ejector_needed[] = {
 };
 
 static int find_str(const char *dmi_name, const char *dmi_sub) {
-	char *pos = strstr(dmi_name, dmi_sub);
+	char *pos;
+
+	if (!dmi_name)
+		return -1;
+	pos = strstr(dmi_name, dmi_sub);
 	if (pos) {
 		pr_info("Found %s in %s\n", dmi_sub, dmi_name);
 		return 0;
@@ -916,9 +920,13 @@ static int find_str(const char *dmi_name, const char *dmi_sub) {
 }
 
 static int check_sku(const char *dmi_sku, const char *end) {
-	u8 length = strlen(dmi_sku);
+	u8 length;
+	char last_char;
 
-	char last_char = dmi_sku[length - 1];
+	if (!dmi_sku || !*dmi_sku)
+		return -1;
+	length = strlen(dmi_sku);
+	last_char = dmi_sku[length - 1];
 	if (last_char == end[0]) {
 		pr_info("Found %s in %s\n", end, dmi_sku);
 		return 0;
@@ -936,9 +944,9 @@ static int gigabyte_laptop_probe(struct device *dev)
 
 	// Older devices are using a different method ID for silent fan mode.
 	// In that case, newer devices won't return anything when using that ID.
-	if (!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY),"GIGABYTE GAMING") ||
-		!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY),"GIGABYTE AERO") ||
-		!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY),"AORUS")) {
+	if (dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE GAMING") ||
+		dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE AERO") ||
+		dmi_match(DMI_PRODUCT_FAMILY, "AORUS")) {
 		pr_info("Skipping silent fan mode ID check, this only applies to old models\n");
 		gigabyte->fan_silent_method = FAN_SILENT_MODE;
 		goto obtain_fan_mode;
@@ -1061,11 +1069,11 @@ obtain_custom_fan_speed:
 	}
 
 	// AORUS VG, Gaming (2025+) and all Aero X16 models can eject dGPU
-	if (!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY), "GIGABYTE AERO") ||
-		!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY), "GIGABYTE GAMING")) {
+	if (dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE AERO") ||
+		dmi_match(DMI_PRODUCT_FAMILY, "GIGABYTE GAMING")) {
 		gigabyte->has_dgpu_ejector = 1;
 	}
-	else if (!strcmp(dmi_get_system_info(DMI_PRODUCT_FAMILY), "AORUS") &&
+	else if (dmi_match(DMI_PRODUCT_FAMILY, "AORUS") &&
 		dmi_get_bios_year() >= 2024) {
 		// Specifically check if we are on any of the AORUS VG models.
 		// This filters out all VF models, as some have BIOS updates released
