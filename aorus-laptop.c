@@ -610,7 +610,7 @@ static ssize_t gpu_boost_store(struct device *dev, struct device_attribute *attr
 {
 	int ret, output;
 	unsigned int mode;
-	struct gigabyte_laptop_wmi *gigabyte;
+	struct gigabyte_laptop_wmi *gigabyte = dev_get_drvdata(dev);
 
 	ret = kstrtouint(buf, 0, &mode);
 	if (ret)
@@ -635,7 +635,6 @@ static ssize_t gpu_boost_store(struct device *dev, struct device_attribute *attr
 	if (ret)
 		return ret;
 
-	gigabyte = dev_get_drvdata(dev);
 	gigabyte->gpu_boost = mode;
 	return count;
 }
