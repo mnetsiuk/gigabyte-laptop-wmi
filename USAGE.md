@@ -23,7 +23,9 @@ Aero/AORUS laptops currently support six fan modes. They are implemented in the 
 - Auto mode
 - Fixed mode
 
-The last two modes will enable custom mode automatically, as they are considered "custom modes". Custom mode will be automatically disabled if the first three modes are enabled.
+The last two modes will enable custom mode automatically, as they are considered "custom modes". Custom mode will be automatically disabled if the first three modes are enabled. Switching from auto or fixed mode to custom mode goes through normal mode, since the firmware doesn't switch between them directly.
+
+Writing the current mode again turns it off and on again; for normal mode nothing is sent. The steps follow the mode the driver last set, so this does not repair a mode switch that failed half-way. When the driver is unloaded while auto or fixed mode is active, it switches the fans back to normal mode first.
 
 **Node:** `/sys/devices/platform/aorus_laptop/fan_mode`
 
@@ -37,7 +39,7 @@ echo '2' | sudo tee /sys/devices/platform/aorus_laptop/fan_mode
 
 Aero/AORUS laptops support setting a custom fan speed. However, this only takes effect if either auto or fixed mode is enabled.
 
-As of version 0.2.0, the accepted range is 0-255. Earlier versions require fulfilling the following conditions:
+As of version 0.2.0, the value is the embedded controller's fan duty, where 229 (0xE5) is 100%. Higher values stop the fans instead of speeding them up ([#46](https://github.com/tangalbert919/gigabyte-laptop-wmi/issues/46)), so the driver rejects them; the 0.2.0 release itself does not check the value. Earlier versions require fulfilling the following conditions:
 
 - The number between 25 and 100.
 - The number is divisible by 5.
@@ -47,8 +49,8 @@ As of version 0.2.0, the accepted range is 0-255. Earlier versions require fulfi
 **Example:** To set the custom fan speed to 50 percent:
 
 ```sh
-# Version 0.2.0+
-echo '128' | sudo tee /sys/devices/platform/aorus_laptop/fan_custom_speed
+# Version 0.2.0+ (229 * 50 / 100 = 114.5)
+echo '115' | sudo tee /sys/devices/platform/aorus_laptop/fan_custom_speed
 # Before version 0.2.0
 echo '50' | sudo tee /sys/devices/platform/aorus_laptop/fan_custom_speed
 ```
@@ -90,7 +92,7 @@ Aero/AORUS laptops support setting a custom fan curve. Custom fan mode must be e
 
 The index node specifies which index in the fan curve can be modified, while the data node holds the temperature (in Celsius) and fan speed for that index, printed in that order (for readability). There are 255 indices available, but only 15 can be modified. This is to ensure compatibility with Gigabyte's Control Center software on dual-boot systems.
 
-Each index should contain both temperature and fan speed in strictly non-decreasing order. The temperature can be any number between 0 and 100, and the fan speed can be any number between 0 and 255.
+Each index should contain both temperature and fan speed in strictly non-decreasing order. The temperature can be any number between 0 and 100, and the fan speed any number between 0 and 229, on the same scale as the custom fan speed. The driver rejects values outside these ranges.
 
 You must set the index node to the index you wish to modify first. The data node can only take a single 16-bit number, so you must combine your specified temperature and fan speed first, in reverse order. An easy way to do this is to multiply the fan speed by 256, and then add the temperature to the result.
 
@@ -98,8 +100,8 @@ You must set the index node to the index you wish to modify first. The data node
 
 ```sh
 echo '2' | sudo tee /sys/devices/platform/aorus_laptop/fan_curve_index
-# 127*256+55 = 32512+55 = 32567
-echo '32567' | sudo tee /sys/devices/platform/aorus_laptop/fan_curve_data
+# 115*256+55 = 29440+55 = 29495
+echo '29495' | sudo tee /sys/devices/platform/aorus_laptop/fan_curve_data
 ```
 
 ## Battery cycle (added in version 0.1.0)
@@ -164,6 +166,12 @@ All VE and newer models (e.g. Aero 16 XE5) return four 8-bit values, while older
 
 Aero/AORUS laptops support reading the current PWM for each fan. This should not be confused with the custom fan speed, which returns the PWM for use in custom fan mode.
 
-The sysfs and HWMON nodes are read-only, but support for writing to HWMON nodes will be added in the future. The sysfs node will only return the PWM for the CPU fan, while the HWMON nodes have separate channels for CPU and GPU fans.
+The sysfs and HWMON nodes are read-only, but support for writing to HWMON nodes will be added in the future. The sysfs node will only return the PWM for the CPU fan, while the HWMON nodes have separate channels for CPU and GPU fans. Both return the embedded controller's fan duty on the same scale as the custom fan speed, where 229 is 100%, not the 0-255 range HWMON usually uses.
 
 **Node:** `/sys/devices/platform/aorus_laptop/fan_pwm`
+
+## Debug method
+
+**Node:** `/sys/devices/platform/aorus_laptop/debug_method`
+
+For debugging only. Write a WMBC method ID to this node, then read it to call that method; the read prints the ID and the result. Since reading calls into the firmware, only `root` can read or write this node.
