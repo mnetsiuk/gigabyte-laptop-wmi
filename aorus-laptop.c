@@ -418,8 +418,10 @@ static int set_fan_mode(struct gigabyte_laptop_wmi *gigabyte, u32 fan_mode)
 		}
 	} else if (fan_mode == FAN_CUSTOM_MODE) {
 		if (gigabyte->fan_mode > 3) {
-			pr_warn("Custom mode is already enabled\n");
-			return 0;
+			// Fixed and auto-maximum mode only reach the curve through normal mode
+			ret = disable_custom_fan_mode(gigabyte->fan_mode);
+			if (ret)
+				return ret;
 		} else if (gigabyte->fan_mode > 0) {
 			ret = gigabyte_laptop_set_devstate(fan_modes[gigabyte->fan_mode], 0, &result);
 			if (ret)
