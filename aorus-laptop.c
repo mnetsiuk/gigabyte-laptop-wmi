@@ -70,6 +70,9 @@ MODULE_VERSION(GIGABYTE_LAPTOP_VERSION);
 // Fan curves
 #define FAN_CURVE_POINTS 15
 
+// Fan duty 229 (0xE5) is 100%. Higher values stop the fans instead of speeding them up.
+#define FAN_MAX_DUTY     229
+
 struct fan_curve_data {
 	u8 temperature[FAN_CURVE_POINTS];
 	u8 speed[FAN_CURVE_POINTS];
@@ -510,6 +513,11 @@ static ssize_t fan_custom_speed_store(struct device *dev, struct device_attribut
 	if (ret)
 		return ret;
 
+	if (speed > FAN_MAX_DUTY) {
+		pr_err("Invalid fan speed\n");
+		return -EINVAL;
+	}
+
 	gigabyte = dev_get_drvdata(dev);
 	mutex_lock(&gigabyte->lock);
 
@@ -710,6 +718,12 @@ static ssize_t fan_curve_data_store(struct device *dev, struct device_attribute 
 	ret = kstrtou16(buf, 0, &data);
 	if (ret)
 		return ret;
+
+	// Speed in the high byte, temperature in the low byte
+	if (data >> 8 > FAN_MAX_DUTY || (data & 0xff) > 100) {
+		pr_err("Invalid fan curve data\n");
+		return -EINVAL;
+	}
 
 	gigabyte = dev_get_drvdata(dev);
 	mutex_lock(&gigabyte->lock);
@@ -1010,8 +1024,8 @@ obtain_custom_fan_speed:
 	ret = gigabyte_laptop_get_devstate(FAN_CUSTOM_SPEED, &output);
 	if (ret)
 		return ret;
-	else if (output)
-		gigabyte->fan_custom_speed = output;
+	else if (output) // An older driver may have left a duty that stops the fans
+		gigabyte->fan_custom_speed = min(output, FAN_MAX_DUTY);
 
 	/*
 		Newer models (VB and later) can have their fan speeds changed separately.
