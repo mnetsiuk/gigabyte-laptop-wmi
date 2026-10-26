@@ -1,7 +1,8 @@
 #!/usr/bin/make -f
 
 MODULE = aorus-laptop
-VERSION = $(shell dpkg-parsechangelog | sed -n 's/^Version: //p')
+# Upstream version without the Debian revision, as postinst and prerm use it
+VERSION = $(shell dpkg-parsechangelog | sed -n 's/^Version: //p' | cut -d- -f1)
 %:
 	dh $@ --parallel --with dkms
 
@@ -9,7 +10,7 @@ override_dh_install:
 	cp ../dkms.conf .
 	sed -i dkms.conf -e "s/@PKGVER@/$(VERSION)/"
 	dh_install dkms.conf ../Makefile ../README.md ../aorus-laptop.c usr/src/$(MODULE)-$(VERSION)/
-	dh_install ../aorus-laptop.conf /etc/modules.load.d/
+	dh_install ../aorus-laptop.conf usr/lib/modules-load.d/
 	rm dkms.conf
 
 override_dh_dkms:

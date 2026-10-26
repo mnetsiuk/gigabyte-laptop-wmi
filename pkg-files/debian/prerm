@@ -1,13 +1,14 @@
 #!/bin/sh
 
 NAME=aorus-laptop
-VERSION=0.2.0
+PKGNAME=$NAME-dkms
+VERSION=$(dpkg-query -W -f='${Version}' $PKGNAME | awk -F "-" '{print $1}' | cut -d\: -f2)
 
 set -e
 
 case "$1" in
-    remove|upgrade|dconfigure)
-        if [ "`dkms status -m $NAME`"]; then
+    remove|upgrade|deconfigure)
+        if [ "`dkms status -m $NAME -v $VERSION`" ]; then
             dkms remove -m $NAME -v $VERSION --all
         fi
     ;;
@@ -16,5 +17,7 @@ case "$1" in
         exit 1
     ;;
 esac
+
+#DEBHELPER#
 
 exit 0
