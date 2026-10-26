@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/wmi.h>
 #include <linux/string.h>
 
@@ -85,6 +86,7 @@ struct gigabyte_laptop_wmi {
 	int charge_limit;
 	int gpu_boost;
 	int fan_curve_index;
+	struct mutex lock; // Serialises sysfs writers that change EC or cached state
 
 	u8 fan_silent_method;
 	u8 debug_method;
@@ -466,24 +468,27 @@ static ssize_t fan_mode_store(struct device *dev, struct device_attribute *attr,
 		return ret;
 	}
 
-	gigabyte = dev_get_drvdata(dev);
-
-	if (gigabyte->fan_mode == fan_mode) {
-		pr_warn("Already set to that fan mode\n");
-		return count;
-	}
-
 	if (fan_mode > 5) {
 		pr_err("Invalid fan mode\n");
 		return -EINVAL;
-	} else {
-		ret = set_fan_mode(gigabyte, fan_modes[fan_mode]);
-		if (ret)
-			return ret;
 	}
 
+	gigabyte = dev_get_drvdata(dev);
+	mutex_lock(&gigabyte->lock);
+
+	if (gigabyte->fan_mode == fan_mode) {
+		pr_warn("Already set to that fan mode\n");
+		goto out;
+	}
+
+	ret = set_fan_mode(gigabyte, fan_modes[fan_mode]);
+	if (ret)
+		goto out;
+
 	gigabyte->fan_mode = fan_mode;
-	return count;
+out:
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 static ssize_t fan_custom_speed_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -503,19 +508,23 @@ static ssize_t fan_custom_speed_store(struct device *dev, struct device_attribut
 	if (ret)
 		return ret;
 
+	gigabyte = dev_get_drvdata(dev);
+	mutex_lock(&gigabyte->lock);
+
 	ret = gigabyte_laptop_set_devstate(FAN_CUSTOM_SPEED, speed, &output);
 	if (ret)
-		return ret;
+		goto out;
 
-	gigabyte = dev_get_drvdata(dev);
 	// On some models, FAN_CUSTOM_SPEED will only set CPU fan speed.
 	if (gigabyte->dual_fan_speed_enabled) {
 		ret = gigabyte_laptop_set_devstate(GPU_FAN_DUTY, speed, &output);
 		if (ret)
-			return ret;
+			goto out;
 	}
 	gigabyte->fan_custom_speed = speed;
-	return count;
+out:
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 static ssize_t fan_pwm_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -556,14 +565,16 @@ static ssize_t charge_mode_store(struct device *dev, struct device_attribute *at
 		return -EINVAL;
 	}
 
+	gigabyte = dev_get_drvdata(dev);
+	mutex_lock(&gigabyte->lock);
+
 	// Only bit 2 affects the charging mode, so shift 2 bits to the left.
 	ret = gigabyte_laptop_set_devstate(CHARGING_MODE, mode << 2, &output);
-	if (ret)
-		return ret;
+	if (!ret)
+		gigabyte->charge_mode = mode;
 
-	gigabyte = dev_get_drvdata(dev);
-	gigabyte->charge_mode = mode;
-	return count;
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 /*
@@ -592,13 +603,15 @@ static ssize_t charge_limit_store(struct device *dev, struct device_attribute *a
 		return -EINVAL;
 	}
 
-	ret = gigabyte_laptop_set_devstate(CHARGING_LIMIT, limit, &output);
-	if (ret)
-		return ret;
-
 	gigabyte = dev_get_drvdata(dev);
-	gigabyte->charge_limit = limit;
-	return count;
+	mutex_lock(&gigabyte->lock);
+
+	ret = gigabyte_laptop_set_devstate(CHARGING_LIMIT, limit, &output);
+	if (!ret)
+		gigabyte->charge_limit = limit;
+
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 static ssize_t gpu_boost_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -633,12 +646,14 @@ static ssize_t gpu_boost_store(struct device *dev, struct device_attribute *attr
 		return -EINVAL;
 	}
 
-	ret = gigabyte_laptop_set_devstate(GPU_QBOOST, mode, &output);
-	if (ret)
-		return ret;
+	mutex_lock(&gigabyte->lock);
 
-	gigabyte->gpu_boost = mode;
-	return count;
+	ret = gigabyte_laptop_set_devstate(GPU_QBOOST, mode, &output);
+	if (!ret)
+		gigabyte->gpu_boost = mode;
+
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 static ssize_t fan_curve_index_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -664,17 +679,23 @@ static ssize_t fan_curve_index_store(struct device *dev, struct device_attribute
 	}
 
 	gigabyte = dev_get_drvdata(dev);
+	mutex_lock(&gigabyte->lock);
 	gigabyte->fan_curve_index = index;
+	mutex_unlock(&gigabyte->lock);
 	return count;
 }
 
 static ssize_t fan_curve_data_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct gigabyte_laptop_wmi *gigabyte = dev_get_drvdata(dev);
-	int index = gigabyte->fan_curve_index;
+	int index, ret;
 
-	return sysfs_emit(buf, "%d %d\n", gigabyte->fan_curve.temperature[index],
+	mutex_lock(&gigabyte->lock);
+	index = gigabyte->fan_curve_index;
+	ret = sysfs_emit(buf, "%d %d\n", gigabyte->fan_curve.temperature[index],
 		gigabyte->fan_curve.speed[index]);
+	mutex_unlock(&gigabyte->lock);
+	return ret;
 }
 
 static ssize_t fan_curve_data_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
@@ -689,17 +710,19 @@ static ssize_t fan_curve_data_store(struct device *dev, struct device_attribute 
 		return ret;
 
 	gigabyte = dev_get_drvdata(dev);
+	mutex_lock(&gigabyte->lock);
 	// likely payload: speed, temp, index
 	//payload = gigabyte->fan_curve.speed[gigabyte->fan_curve_index] << 16 | gigabyte->fan_curve.temperature[gigabyte->fan_curve_index] << 8 | (u8) gigabyte->fan_curve_index;
 	payload = data << 8 | gigabyte->fan_curve_index;
 
 	ret = gigabyte_laptop_set_devstate(FAN_INDEX_VALUE, payload, &output);
-	if (ret)
-		return ret;
+	if (!ret) {
+		gigabyte->fan_curve.temperature[gigabyte->fan_curve_index] = data;
+		gigabyte->fan_curve.speed[gigabyte->fan_curve_index] = data >> 8;
+	}
 
-	gigabyte->fan_curve.temperature[gigabyte->fan_curve_index] = data;
-	gigabyte->fan_curve.speed[gigabyte->fan_curve_index] = data >> 8;
-	return count;
+	mutex_unlock(&gigabyte->lock);
+	return ret ? ret : count;
 }
 
 static ssize_t battery_cycle_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -1122,6 +1145,7 @@ static int __init gigabyte_laptop_init(void)
 		result = -ENOMEM;
 		goto fail_platform_driver;
 	}
+	mutex_init(&gigabyte->lock);
 
 	platform_device = platform_device_alloc(GIGABYTE_LAPTOP_FILE, -1);
 	if (!platform_device) {
