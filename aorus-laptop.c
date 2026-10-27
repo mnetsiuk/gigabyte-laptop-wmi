@@ -204,7 +204,8 @@ static u16 convert_fan_rpm(int val)
 static umode_t gigabyte_laptop_hwmon_is_visible(const void *data, enum hwmon_sensor_types type,
 					u32 attr, int channel)
 {
-	struct gigabyte_laptop_wmi *gigabyte = platform_get_drvdata(platform_device);
+	const struct gigabyte_laptop_wmi *gigabyte = data;
+
 	switch (type) {
 		case hwmon_temp:
 			switch (attr) {
@@ -1205,18 +1206,24 @@ static int __init gigabyte_laptop_init(void)
 		pr_warn("Unable to add platform device\n");
 		goto fail_platform_device;
 	}
+	// A failed bind still adds the device, but clears the driver data every attribute needs.
+	if (!platform_get_drvdata(gigabyte->pdev)) {
+		pr_err("Unable to bind platform device\n");
+		result = -ENODEV;
+		goto fail_device_del;
+	}
 
 	gigabyte->hwmon_dev = hwmon_device_register_with_info(&gigabyte->pdev->dev,
 			GIGABYTE_LAPTOP_FILE, gigabyte, &gigabyte_laptop_chip_info, NULL);
 	if (IS_ERR(gigabyte->hwmon_dev)) {
 		result = PTR_ERR(gigabyte->hwmon_dev);
 		pr_err("hwmon registration failed with %d\n", result);
-		goto fail_hwmon;
+		goto fail_device_del;
 	}
 	pr_info("AORUS WMI kernel driver started\n");
 	return 0;
 
-fail_hwmon:
+fail_device_del:
 	platform_device_del(gigabyte->pdev);
 fail_platform_device:
 	platform_device_put(gigabyte->pdev);
