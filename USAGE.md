@@ -166,7 +166,7 @@ All VE and newer models (e.g. Aero 16 XE5) return four 8-bit values, while older
 
 Aero/AORUS laptops support reading the current PWM for each fan. This should not be confused with the custom fan speed, which returns the PWM for use in custom fan mode.
 
-The sysfs and HWMON nodes are read-only, but support for writing to HWMON nodes will be added in the future. The sysfs node will only return the PWM for the CPU fan, while the HWMON nodes have separate channels for CPU and GPU fans. Both return the embedded controller's fan duty on the same scale as the custom fan speed, where 229 is 100%, not the 0-255 range HWMON usually uses.
+The sysfs and HWMON nodes are read-only, but support for writing to HWMON nodes will be added in the future. The sysfs node will only return the PWM for the CPU fan, while the HWMON nodes have separate channels for CPU and GPU fans. The sysfs node returns the embedded controller's fan duty on the same scale as the custom fan speed, where 229 is 100%. The HWMON nodes scale it to the usual 0-255 range.
 
 **Node:** `/sys/devices/platform/aorus_laptop/fan_pwm`
 

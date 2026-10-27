@@ -100,10 +100,10 @@ struct gigabyte_laptop_wmi {
 	u8 has_four_fans;
 };
 
+// pwmN_enable values from the hwmon sysfs ABI
 enum fan_ctrl {
-	AORUS_FAN_CTRL_DISABLED = 0,
-	AORUS_FAN_CTRL_AUTO = 1,
-	AORUS_FAN_CTRL_MANUAL = 2
+	AORUS_FAN_CTRL_MANUAL = 1,
+	AORUS_FAN_CTRL_AUTO = 2
 };
 
 static struct platform_device *platform_device;
@@ -306,15 +306,12 @@ static int gigabyte_laptop_hwmon_read(struct device *dev, enum hwmon_sensor_type
 					ret = gigabyte_laptop_get_devstate(fan_pwm_channels[channel], &output);
 					if (ret)
 						break;
-					*val = output;
+					// The EC's duty tops out at FAN_MAX_DUTY, hwmon's pwm at 255
+					*val = DIV_ROUND_CLOSEST(clamp_val(output, 0, FAN_MAX_DUTY) * 255, FAN_MAX_DUTY);
 					break;
 				case hwmon_pwm_enable:
-					if (gigabyte->fan_mode < 3) // normal, gaming, silent
-						*val = AORUS_FAN_CTRL_DISABLED;
-					else if (gigabyte->fan_mode > 3) // auto-max or fixed
-						*val = AORUS_FAN_CTRL_AUTO;
-					else // the fan curve
-						*val = AORUS_FAN_CTRL_MANUAL;
+					// Auto and fixed mode run the fans at fan_custom_speed, the others leave them to the EC
+					*val = gigabyte->fan_mode > 3 ? AORUS_FAN_CTRL_MANUAL : AORUS_FAN_CTRL_AUTO;
 					break;
 				default:
 					break;
