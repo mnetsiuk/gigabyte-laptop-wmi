@@ -278,7 +278,7 @@ static int gigabyte_laptop_hwmon_read(struct device *dev, enum hwmon_sensor_type
 					*val = output * 1000;
 					break;
 				case 2:
-					// Motherboard temp cannot be read through WMI
+					// FTP1, the temperature the EC runs the fans by (the CPU's on the AORUS 5 SE). No WMI method reads it
 					ret = ec_read(0x62, &result);
 					if (ret)
 						break;
