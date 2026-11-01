@@ -106,7 +106,7 @@ echo '29495' | sudo tee /sys/devices/platform/aorus_laptop/fan_curve_data
 
 ## Battery cycle (added in version 0.1.0)
 
-Aero/AORUS laptops support battery cycles, but are only accessible through the embedded controller. Older models are likely to read 0 due to older Gigabyte firmware. Because there are two different battery cycle numbers, only the highest one is printed. This node is read-only.
+Aero/AORUS laptops support battery cycles, but are only accessible through the embedded controller. Older models are likely to read 0 due to older Gigabyte firmware. The EC keeps the count in two bytes, high and low, which are combined as Gigabyte Control Center does. This node is read-only.
 
 **Node:** `/sys/devices/platform/aorus_laptop/battery_cycle`
 

@@ -751,7 +751,8 @@ static ssize_t battery_cycle_show(struct device *dev, struct device_attribute *a
 	if (ret)
 		return ret;
 
-	return sysfs_emit(buf, "%d\n", max(cyc1, cyc2));
+	// One 16-bit count: CYC1 (0x6E) is the high byte, CYC2 (0x6D) the low one, as GCC adds them
+	return sysfs_emit(buf, "%d\n", cyc1 << 8 | cyc2);
 }
 
 static ssize_t light_sensor_show(struct device *dev, struct device_attribute *attr, char *buf)
